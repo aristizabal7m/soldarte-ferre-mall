@@ -79,17 +79,17 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "SoldArte | Taller de soldadura y arte en metal" },
+      { title: "SoldArte FerreMALL | Tu plataforma de ferreterías" },
       {
         name: "description",
         content:
-          "Cotice puertas, rejas, ventanas, escaleras y estructuras metálicas a la medida con SoldArte.",
+          "Encuentre herramientas y materiales de las mejores ferreterías en un solo lugar y elija dónde comprar con SoldArte FerreMALL.",
       },
-      { name: "author", content: "SoldArte" },
-      { property: "og:title", content: "SoldArte | Taller de soldadura y arte en metal" },
+      { name: "author", content: "SoldArte FerreMALL" },
+      { property: "og:title", content: "SoldArte FerreMALL | Tu plataforma de ferreterías" },
       {
         property: "og:description",
-        content: "Cotización automática de construcciones metálicas y venta de herramienta.",
+        content: "Compare y compre herramientas y materiales de construccion en múltiples ferreterías.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
