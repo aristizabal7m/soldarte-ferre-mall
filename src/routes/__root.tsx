@@ -6,7 +6,6 @@ import {
   useRouter,
   HeadContent,
   Scripts,
-  useNavigate,
 } from "@tanstack/react-router";
 import { useEffect, useState, useRef, type ReactNode } from "react";
 import { X, Send, Sparkles, Bot, User } from "lucide-react";
@@ -146,7 +145,7 @@ function ChatBot() {
   const [mensajes, setMensajes] = useState<ChatMessage[]>([
     {
       role: "model",
-      text: "¡Hola! Soy el asistente virtual de SoldArte FerreMALL. ¿En qué le puedo ayudar con herramientas, materiales o ferreterías?",
+      text: "¡Hola! Soy el asistente virtual de SoldArte FerreMALL. ¿En qué le puedo ayudar a encontrar las mejores ferreterías o suministros?",
     },
   ]);
 
@@ -292,11 +291,10 @@ function ChatBot() {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const { session, esAdmin } = useSession();
-  const navigate = useNavigate();
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
-    navigate({ to: "/login" });
+    window.location.href = "/login";
   };
 
   return (
@@ -321,23 +319,23 @@ function RootComponent() {
           <Link to="/" className={navCls} activeProps={{ className: "text-forge border-b-2 border-forge" }} activeOptions={{ exact: true }}>
             Inicio
           </Link>
-          <Link to="/cotizar" className={navCls} activeProps={{ className: "text-forge border-b-2 border-forge" }}>
-            Cotizador
-          </Link>
-          <Link to="/herramientas" className={navCls} activeProps={{ className: "text-forge border-b-2 border-forge" }}>
-            Herramientas
-          </Link>
-          <Link to="/vender" className={navCls} activeProps={{ className: "text-forge border-b-2 border-forge" }}>
-            Vender
-          </Link>
-          <Link to="/panel" className={navCls} activeProps={{ className: "text-forge border-b-2 border-forge" }}>
-            Panel
-          </Link>
+
+          {!session ? (
+            <Link to="/vender" className={navCls} activeProps={{ className: "text-forge border-b-2 border-forge" }}>
+              Registrar mi Ferretería
+            </Link>
+          ) : (
+            <Link to="/panel" className={navCls} activeProps={{ className: "text-forge border-b-2 border-forge" }}>
+              Mi Panel
+            </Link>
+          )}
+
           {esAdmin && (
             <Link to="/admin" className={navCls} activeProps={{ className: "text-forge border-b-2 border-forge" }}>
               Admin
             </Link>
           )}
+
           {!session ? (
             <Link to="/login" className={navCls} activeProps={{ className: "text-forge border-b-2 border-forge" }}>
               Ingresar
