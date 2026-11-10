@@ -6,6 +6,7 @@ import {
   useRouter,
   HeadContent,
   Scripts,
+  useNavigate,
 } from "@tanstack/react-router";
 import { useEffect, useState, useRef, type ReactNode } from "react";
 import { X, Send, Sparkles, Bot, User } from "lucide-react";
@@ -13,6 +14,8 @@ import { X, Send, Sparkles, Bot, User } from "lucide-react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { enviarMensajeChat } from "../lib/chat-server";
+import { useSession } from "../hooks/use-session";
+import { supabase } from "../lib/supabase";
 
 function NotFoundComponent() {
   return (
@@ -143,7 +146,7 @@ function ChatBot() {
   const [mensajes, setMensajes] = useState<ChatMessage[]>([
     {
       role: "model",
-      text: "¡Hola! Soy el asistente virtual de SoldArte. ¿En qué le puedo ayudar con herramientas, materiales o solicitudes de cotización?",
+      text: "¡Hola! Soy el asistente virtual de SoldArte FerreMALL. ¿En qué le puedo ayudar con herramientas, materiales o ferreterías?",
     },
   ]);
 
@@ -173,7 +176,7 @@ function ChatBot() {
           ...nuevosMensajes,
           {
             role: "model",
-            text: resultado?.error || "Disculpe, ocurrió un problema al consultar con el taller.",
+            text: resultado?.error || "Disculpe, ocurrió un problema al procesar su consulta.",
           },
         ]);
       }
@@ -211,9 +214,9 @@ function ChatBot() {
               </span>
               <div>
                 <h3 className="font-display text-sm font-bold tracking-wide uppercase text-foreground">
-                  Asistente SoldArte
+                  Asistente FerreMALL
                 </h3>
-                <p className="text-[10px] text-muted-foreground">En línea · Taller de Pereira</p>
+                <p className="text-[10px] text-muted-foreground">En línea · Plataforma de Ferreterías</p>
               </div>
             </div>
             <button
@@ -288,6 +291,13 @@ function ChatBot() {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const { session, esAdmin } = useSession();
+  const navigate = useNavigate();
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    navigate({ to: "/login" });
+  };
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -297,9 +307,14 @@ function RootComponent() {
             <span className="grid h-9 w-9 shrink-0 place-items-center bg-primary font-display text-lg font-bold text-primary-foreground">
               S
             </span>
-            <span className="truncate font-display text-xl font-bold tracking-widest uppercase">
-              Sold<span className="text-forge">Arte</span>
-            </span>
+            <div className="flex flex-col">
+              <span className="truncate font-display text-xl font-bold tracking-widest uppercase leading-none">
+                Sold<span className="text-forge">Arte</span>
+              </span>
+              <span className="font-display text-[10px] font-semibold tracking-[0.25em] uppercase text-forge">
+                ferreMALL
+              </span>
+            </div>
           </Link>
         </div>
         <nav className="flex overflow-x-auto border-t border-border px-2">
@@ -312,9 +327,26 @@ function RootComponent() {
           <Link to="/herramientas" className={navCls} activeProps={{ className: "text-forge border-b-2 border-forge" }}>
             Herramientas
           </Link>
+          <Link to="/vender" className={navCls} activeProps={{ className: "text-forge border-b-2 border-forge" }}>
+            Vender
+          </Link>
           <Link to="/panel" className={navCls} activeProps={{ className: "text-forge border-b-2 border-forge" }}>
             Panel
           </Link>
+          {esAdmin && (
+            <Link to="/admin" className={navCls} activeProps={{ className: "text-forge border-b-2 border-forge" }}>
+              Admin
+            </Link>
+          )}
+          {!session ? (
+            <Link to="/login" className={navCls} activeProps={{ className: "text-forge border-b-2 border-forge" }}>
+              Ingresar
+            </Link>
+          ) : (
+            <button onClick={handleSignOut} className={navCls}>
+              Salir
+            </button>
+          )}
         </nav>
       </header>
       <Outlet />
