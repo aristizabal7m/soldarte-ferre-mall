@@ -1,227 +1,427 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useState, useEffect } from "react";
+import { productos as productosIniciales, cop, type Producto } from "@/lib/soldarte";
+import { useSession } from "@/hooks/use-session";
 import { supabase } from "@/lib/supabase";
-import {
-  tiposTrabajo,
-  type Estado,
-  type Solicitud,
-} from "@/lib/soldarte";
+import { Store, ShieldAlert, Clock, AlertTriangle, Plus, Trash2, Edit2, Check } from "lucide-react";
 
 export const Route = createFileRoute("/panel")({
   head: () => ({
     meta: [
-      { title: "Panel del taller | SoldArte" },
-      {
-        name: "description",
-        content:
-          "Solicitudes de cotización recibidas con tipo de construcción, descripción, datos del cliente y estado del pedido.",
-      },
-      { property: "og:title", content: "Panel del taller | SoldArte" },
-      {
-        property: "og:description",
-        content: "Gestione las solicitudes de cotización del taller SoldArte.",
-      },
+      { title: "Panel de Gestión | SoldArte FerreMALL" },
+      { name: "description", content: "Administre el catálogo de herramientas y materiales de su ferretería." },
     ],
   }),
-  component: Panel,
+  component: PanelComponent,
 });
 
-const estados: Estado[] = ["Pendiente", "Atendida"];
-
-const colorEstado: Record<Estado, string> = {
-  Pendiente: "border-estado-pendiente/60 bg-estado-pendiente/15 text-estado-pendiente",
-  Atendida: "border-estado-entregado/60 bg-estado-entregado/15 text-estado-entregado",
-};
-
-const bordeEstado: Record<Estado, string> = {
-  Pendiente: "border-l-estado-pendiente",
-  Atendida: "border-l-estado-entregado",
-};
-
-const nombreTipo = (id: Solicitud["tipo"]) =>
-  tiposTrabajo.find((t) => t.id === id)?.nombre ?? id;
-
-function formatearFecha(isoString: string): string {
-  if (!isoString) return "";
-  const fecha = new Date(isoString);
-  return fecha.toLocaleDateString("es-CO", {
-    day: "numeric",
-    month: "short",
-  });
+interface FerreteriaInfo {
+  id: string;
+  nombre: string;
+  ciudad: string;
+  telefono: string;
+  direccion: string;
+  estado: "pendiente" | "aprobada" | "rechazada";
 }
 
-function Panel() {
-  const [lista, setLista] = useState<Solicitud[]>([]);
-  const [cargando, setCargando] = useState(true);
-  const [filtro, setFiltro] = useState<Estado | "Todas">("Todas");
+function PanelComponent() {
+  const navigate = useNavigate();
+  const { user, cargando: cargandoSesion } = useSession();
 
-  const cargarSolicitudes = async () => {
-    setCargando(true);
-    const { data, error } = await supabase
-      .from("solicitudes_cotizacion")
-      .select("*")
-      .order("created_at", { ascending: false });
+  const [ferreteria, setFerreteria] = useState<FerreteriaInfo | null>(null);
+  const [cargandoFerreteria, setCargandoFerreteria] = useState(true);
 
-    if (error) {
-      console.error("Error al cargar solicitudes:", error);
-    } else if (data) {
-      const traducidas: Solicitud[] = data.map((item) => ({
-        id: item.id,
-        tipo: item.tipo_construccion,
-        descripcion: item.descripcion,
-        cliente: item.cliente_nombre,
-        telefono: item.cliente_telefono,
-        estado: item.estado as Estado,
-        fecha: formatearFecha(item.created_at),
-      }));
-      setLista(traducidas);
-    }
-    setCargando(false);
-  };
+  // Formulario de registro de ferretería
+  const [nombre, setNombre] = useState("");
+  const [ciudad, setCiudad] = useState("Pereira");
+  const [telefono, setTelefono] = useState("");
+  const [direccion, setDireccion] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  const [errorForm, setErrorForm] = useState<string | null>(null);
 
+  // Estado local del panel (contenido original preservado)
+  const [listaProductos, setListaProductos] = useState<Producto[]>(productosIniciales);
+  const [nuevoNombre, setNuevoNombre] = useState("");
+  const [nuevoPrecio, setNuevoPrecio] = useState("");
+  const [nuevaCategoria, setNuevaCategoria] = useState("Herramientas");
+  const [nuevoDetalle, setNuevoDetalle] = useState("");
+  const [editandoId, setEditandoId] = useState<string | null>(null);
+
+  // Cargar información de la ferretería del usuario
   useEffect(() => {
-    cargarSolicitudes();
-  }, []);
+    if (cargandoSesion) return;
 
-  const cambiar = async (id: string, nuevoEstado: Estado) => {
-    setLista((prev) =>
-      prev.map((x) => (x.id === id ? { ...x, estado: nuevoEstado } : x))
-    );
+    if (!user) {
+      navigate({ to: "/login" });
+      return;
+    }
 
-    const { error } = await supabase
-      .from("solicitudes_cotizacion")
-      .update({ estado: nuevoEstado })
-      .eq("id", id);
+    async function cargarFerreteria() {
+      setCargandoFerreteria(true);
+      try {
+        const { data, error } = await supabase
+          .from("ferreterias")
+          .select("id, nombre, ciudad, telefono, direccion, estado")
+          .eq("owner_id", user.id)
+          .maybeSingle();
 
-    if (error) {
-      console.error("Error al actualizar estado:", error);
-      cargarSolicitudes();
+        if (error) {
+          console.error("Error al cargar ferretería:", error.message);
+        } else if (data) {
+          setFerreteria(data as FerreteriaInfo);
+        }
+      } catch (err) {
+        console.error("Excepción al consultar ferretería:", err);
+      } finally {
+        setCargandoFerreteria(false);
+      }
+    }
+
+    cargarFerreteria();
+  }, [user, cargandoSesion, navigate]);
+
+  const registrarFerreteria = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+    setErrorForm(null);
+    setGuardando(true);
+
+    try {
+      const { data, error } = await supabase
+        .from("ferreterias")
+        .insert({
+          nombre,
+          ciudad,
+          telefono,
+          direccion,
+        })
+        .select("id, nombre, ciudad, telefono, direccion, estado")
+        .single();
+
+      if (error) {
+        setErrorForm(error.message);
+      } else if (data) {
+        setFerreteria(data as FerreteriaInfo);
+      }
+    } catch (err) {
+      console.error("Error al registrar ferretería:", err);
+      setErrorForm("Ocurrió un error al guardar los datos de su ferretería.");
+    } finally {
+      setGuardando(false);
     }
   };
 
-  const visibles =
-    filtro === "Todas"
-      ? [...lista].sort((a, b) => {
-          if (a.estado === "Pendiente" && b.estado !== "Pendiente") return -1;
-          if (a.estado !== "Pendiente" && b.estado === "Pendiente") return 1;
-          return 0;
-        })
-      : lista.filter((s) => s.estado === filtro);
+  // Funciones del panel original
+  const agregarProducto = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!nuevoNombre || !nuevoPrecio) return;
 
-  const pendientes = lista.filter((s) => s.estado === "Pendiente").length;
+    const prod: Producto = {
+      id: Date.now().toString(),
+      nombre: nuevoNombre,
+      precio: Number(nuevoPrecio),
+      categoria: nuevaCategoria,
+      detalle: nuevoDetalle || "Sin descripción",
+      imagen: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=400&auto=format&fit=crop&q=60",
+    };
 
+    setListaProductos([prod, ...listaProductos]);
+    setNuevoNombre("");
+    setNuevoPrecio("");
+    setNuevoDetalle("");
+  };
+
+  const eliminarProducto = (id: string) => {
+    setListaProductos(listaProductos.filter((p) => p.id !== id));
+  };
+
+  // Renderizado condicional según estado de carga y sesión
+  if (cargandoSesion || cargandoFerreteria) {
+    return (
+      <main className="flex min-h-[calc(100vh-8rem)] items-center justify-center bg-background">
+        <p className="text-xs uppercase font-bold tracking-wider text-muted-foreground animate-pulse">
+          Cargando panel de gestión...
+        </p>
+      </main>
+    );
+  }
+
+  // 1. Caso: Usuario no tiene registrada su ferretería
+  if (!ferreteria) {
+    return (
+      <main className="flex min-h-[calc(100vh-8rem)] items-center justify-center bg-background px-4 py-12">
+        <div className="w-full max-w-lg border border-border bg-card p-6 sm:p-8 shadow-2xl">
+          <div className="text-center mb-6">
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-forge/10 text-forge">
+              <Store className="h-6 w-6" />
+            </div>
+            <h1 className="font-display text-2xl font-bold uppercase tracking-wide text-foreground">
+              Datos de su Ferretería
+            </h1>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Complete la información de su establecimiento para enviar la solicitud de registro.
+            </p>
+          </div>
+
+          {errorForm && (
+            <div className="mb-4 flex items-center gap-2 border border-destructive/50 bg-destructive/10 p-3 text-xs text-destructive">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              <span>{errorForm}</span>
+            </div>
+          )}
+
+          <form onSubmit={registrarFerreteria} className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">
+                Nombre de la Ferretería
+              </label>
+              <input
+                type="text"
+                required
+                value={nombre}
+                onChange={(e) => setNombre(e.target.value)}
+                placeholder="Ej. Ferretería El Pregonero"
+                className="w-full border border-border bg-input px-3 py-2 text-xs text-foreground outline-none focus:border-forge"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">
+                  Ciudad
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={ciudad}
+                  onChange={(e) => setCiudad(e.target.value)}
+                  className="w-full border border-border bg-input px-3 py-2 text-xs text-foreground outline-none focus:border-forge"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">
+                  Teléfono de Contacto
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={telefono}
+                  onChange={(e) => setTelefono(e.target.value)}
+                  placeholder="300 000 0000"
+                  className="w-full border border-border bg-input px-3 py-2 text-xs text-foreground outline-none focus:border-forge"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">
+                Dirección Comercial
+              </label>
+              <input
+                type="text"
+                required
+                value={direccion}
+                onChange={(e) => setDireccion(e.target.value)}
+                placeholder="Carrera 7 # 15-20"
+                className="w-full border border-border bg-input px-3 py-2 text-xs text-foreground outline-none focus:border-forge"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={guardando}
+              className="w-full bg-primary py-2.5 text-xs font-bold uppercase tracking-wider text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+            >
+              {guardando ? "Guardando..." : "Enviar Solicitud"}
+            </button>
+          </form>
+        </div>
+      </main>
+    );
+  }
+
+  // 2. Caso: Solicitud pendiente de aprobación
+  if (ferreteria.estado === "pendiente") {
+    return (
+      <main className="flex min-h-[calc(100vh-8rem)] items-center justify-center bg-background px-4">
+        <div className="max-w-md border border-forge/30 bg-card p-8 text-center shadow-2xl">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-forge/10 text-forge">
+            <Clock className="h-7 w-7" />
+          </div>
+          <h2 className="font-display text-xl font-bold uppercase text-foreground">
+            Solicitud en revisión
+          </h2>
+          <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
+            Su ferretería <strong className="text-foreground">{ferreteria.nombre}</strong> está siendo validada por nuestro equipo de administración. Le notificaremos tan pronto sea aprobada para publicar inventario.
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  // 3. Caso: Solicitud rechazada
+  if (ferreteria.estado === "rechazada") {
+    return (
+      <main className="flex min-h-[calc(100vh-8rem)] items-center justify-center bg-background px-4">
+        <div className="max-w-md border border-destructive/50 bg-card p-8 text-center shadow-2xl">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+            <ShieldAlert className="h-7 w-7" />
+          </div>
+          <h2 className="font-display text-xl font-bold uppercase text-foreground">
+            Solicitud no aprobada
+          </h2>
+          <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
+            La inscripción de la ferretería <strong className="text-foreground">{ferreteria.nombre}</strong> no ha sido aprobada en este momento. Por favor contacte con soporte técnico para más información.
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  // 4. Caso: Solicitud aprobada -> Mostrar Panel Original
   return (
-    <div className="p-5 pb-16 sm:p-8">
-      <h1 className="font-display text-3xl font-bold tracking-tight uppercase">Panel del taller</h1>
-      <p className="mt-1 text-sm text-muted-foreground">
-        {lista.length} solicitudes · {pendientes} por atender
-      </p>
+    <main className="min-h-screen bg-background py-10">
+      <div className="container mx-auto px-4">
+        <div className="mb-8 border-b border-border pb-4 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h1 className="font-display text-2xl font-bold uppercase tracking-wide text-foreground">
+              Panel de Control - {ferreteria.nombre}
+            </h1>
+            <p className="text-xs text-muted-foreground">
+              Gestión de productos de la ferretería ({ferreteria.ciudad})
+            </p>
+          </div>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-400">
+            <Check className="h-3.5 w-3.5" />
+            <span>Ferretería Aprobada</span>
+          </span>
+        </div>
 
-      <div className="mt-5 flex flex-wrap gap-2">
-        {(["Todas", ...estados] as const).map((e) => (
-          <button
-            key={e}
-            onClick={() => setFiltro(e)}
-            className={`border px-3 py-2 text-xs font-bold tracking-widest uppercase ${
-              filtro === e
-                ? "border-forge bg-forge/15 text-forge"
-                : "border-border bg-card text-muted-foreground hover:border-forge/40"
-            }`}
-          >
-            {e}
-          </button>
-        ))}
-      </div>
+        <div className="grid gap-8 lg:grid-cols-3">
+          {/* Formulario Agregar Producto */}
+          <div className="border border-border bg-card p-6 h-fit">
+            <h2 className="font-display text-base font-bold uppercase text-foreground mb-4 flex items-center gap-2">
+              <Plus className="h-4 w-4 text-forge" />
+              <span>Nuevo Producto</span>
+            </h2>
 
-      <div className="mt-5 overflow-x-auto border border-border">
-        <table className="w-full min-w-[720px] border-collapse text-sm">
-          <thead>
-            <tr className="bg-muted/60 text-left">
-              <th className="px-3 py-2.5 text-xs font-bold tracking-widest uppercase text-muted-foreground">
-                Solicitud
-              </th>
-              <th className="px-3 py-2.5 text-xs font-bold tracking-widest uppercase text-muted-foreground">
-                Tipo
-              </th>
-              <th className="px-3 py-2.5 text-xs font-bold tracking-widest uppercase text-muted-foreground">
-                Descripción
-              </th>
-              <th className="px-3 py-2.5 text-xs font-bold tracking-widest uppercase text-muted-foreground">
-                Cliente
-              </th>
-              <th className="px-3 py-2.5 text-xs font-bold tracking-widest uppercase text-muted-foreground">
-                Estado
-              </th>
-              <th className="px-3 py-2.5 text-xs font-bold tracking-widest uppercase text-muted-foreground">
-                Acción
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {cargando ? (
-              <tr>
-                <td colSpan={6} className="bg-card px-3 py-6 text-center text-sm text-muted-foreground">
-                  Cargando solicitudes desde Supabase...
-                </td>
-              </tr>
-            ) : (
-              visibles.map((s) => (
-                <tr
-                  key={s.id}
-                  className={`border-t border-border border-l-4 ${bordeEstado[s.estado]} bg-card align-top`}
+            <form onSubmit={agregarProducto} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-bold uppercase text-muted-foreground mb-1">
+                  Nombre
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={nuevoNombre}
+                  onChange={(e) => setNuevoNombre(e.target.value)}
+                  placeholder="Ej. Soldador Inverter 200A"
+                  className="w-full border border-border bg-input px-3 py-2 text-foreground outline-none focus:border-forge"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold uppercase text-muted-foreground mb-1">
+                  Precio (COP)
+                </label>
+                <input
+                  type="number"
+                  required
+                  value={nuevoPrecio}
+                  onChange={(e) => setNuevoPrecio(e.target.value)}
+                  placeholder="450000"
+                  className="w-full border border-border bg-input px-3 py-2 text-foreground outline-none focus:border-forge"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold uppercase text-muted-foreground mb-1">
+                  Categoría
+                </label>
+                <select
+                  value={nuevaCategoria}
+                  onChange={(e) => setNuevaCategoria(e.target.value)}
+                  className="w-full border border-border bg-input px-3 py-2 text-foreground outline-none focus:border-forge"
                 >
-                  <td className="px-3 py-3 whitespace-nowrap text-xs text-muted-foreground">
-                    <span className="font-bold tracking-widest uppercase text-foreground">
-                      {s.id.substring(0, 8)}
+                  <option value="Herramientas">Herramientas</option>
+                  <option value="Equipos">Equipos</option>
+                  <option value="Insumos">Insumos</option>
+                  <option value="Seguridad">Seguridad</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold uppercase text-muted-foreground mb-1">
+                  Detalle / Especificaciones
+                </label>
+                <textarea
+                  rows={3}
+                  value={nuevoDetalle}
+                  onChange={(e) => setNuevoDetalle(e.target.value)}
+                  placeholder="Descripción del artículo..."
+                  className="w-full border border-border bg-input px-3 py-2 text-foreground outline-none focus:border-forge"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full bg-primary py-2 font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/90"
+              >
+                Agregar al Catálogo
+              </button>
+            </form>
+          </div>
+
+          {/* Tabla / Lista de Productos */}
+          <div className="lg:col-span-2 border border-border bg-card p-6">
+            <h2 className="font-display text-base font-bold uppercase text-foreground mb-4">
+              Catálogo Publicado ({listaProductos.length})
+            </h2>
+
+            <div className="space-y-3">
+              {listaProductos.map((p) => (
+                <div
+                  key={p.id}
+                  className="flex flex-wrap items-center justify-between border border-border bg-background p-3 gap-3"
+                >
+                  <div className="flex-1 min-w-[200px]">
+                    <span className="text-[10px] font-bold uppercase text-forge bg-forge/10 px-1.5 py-0.5 rounded">
+                      {p.categoria}
                     </span>
-                    <br />
-                    {s.fecha}
-                  </td>
-                  <td className="px-3 py-3 font-display font-bold tracking-wide uppercase">
-                    {nombreTipo(s.tipo)}
-                  </td>
-                  <td className="px-3 py-3">{s.descripcion}</td>
-                  <td className="px-3 py-3">
-                    <span className="font-display font-bold tracking-wide uppercase">
-                      {s.cliente}
+                    <h3 className="font-display text-sm font-bold text-foreground mt-1">
+                      {p.nombre}
+                    </h3>
+                    <p className="text-xs text-muted-foreground line-clamp-1">{p.detalle}</p>
+                  </div>
+
+                  <div className="flex items-center gap-4">
+                    <span className="font-display text-sm font-bold text-foreground">
+                      {cop(p.precio)}
                     </span>
-                    <br />
-                    <span className="text-xs text-muted-foreground">{s.telefono}</span>
-                  </td>
-                  <td className="px-3 py-3">
-                    <span
-                      className={`inline-block border px-2 py-1 text-xs font-bold tracking-widest whitespace-nowrap uppercase ${colorEstado[s.estado]}`}
-                    >
-                      {s.estado}
-                    </span>
-                  </td>
-                  <td className="px-3 py-3">
-                    <select
-                      aria-label={`Cambiar estado de ${s.id}`}
-                      className="w-full max-w-36 border border-border bg-input px-2 py-1.5 text-sm text-foreground outline-none focus:border-forge"
-                      value={s.estado}
-                      onChange={(e) => cambiar(s.id, e.target.value as Estado)}
-                    >
-                      {estados.map((e) => (
-                        <option key={e} value={e}>
-                          {e}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                </tr>
-              ))
-            )}
-            {!cargando && visibles.length === 0 && (
-              <tr>
-                <td colSpan={6} className="bg-card px-3 py-6 text-center text-sm text-muted-foreground">
-                  No hay solicitudes en este estado.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => setEditandoId(editandoId === p.id ? null : p.id)}
+                        className="p-1 text-muted-foreground hover:text-foreground"
+                        title="Editar"
+                      >
+                        <Edit2 className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => eliminarProducto(p.id)}
+                        className="p-1 text-muted-foreground hover:text-destructive"
+                        title="Eliminar"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
+    </main>
   );
 }
