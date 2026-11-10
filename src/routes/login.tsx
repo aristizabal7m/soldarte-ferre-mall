@@ -1,16 +1,17 @@
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
-import { Wrench, ShieldAlert, CheckCircle2, Lock, Mail } from "lucide-react";
+import { Wrench, ShieldAlert, CheckCircle2, Lock, Mail, User, Store } from "lucide-react";
 
 export const Route = createFileRoute("/login")({
   validateSearch: (search: Record<string, unknown>) => ({
     mode: search.mode === "register" ? "register" : "login",
+    role: search.role === "ferreteria" ? "ferreteria" : "cliente",
   }),
   head: () => ({
     meta: [
-      { title: "Ingresar | SoldArte FerreMALL" },
-      { name: "description", content: "Acceso para ferreterías y administradores." },
+      { title: "Acceso | SoldArte FerreMALL" },
+      { name: "description", content: "Inicie sesión o regístrese para comprar o vender en la plataforma." },
     ],
   }),
   component: LoginComponent,
@@ -19,24 +20,27 @@ export const Route = createFileRoute("/login")({
 function LoginComponent() {
   const navigate = useNavigate();
   const search = useSearch({ from: "/login" });
+
   const [esRegistro, setEsRegistro] = useState(search.mode === "register");
+  const [tipoCuenta, setTipoCuenta] = useState<"cliente" | "ferreteria">(search.role);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [nombreCompleto, setNombreCompleto] = useState("");
   const [errorText, setErrorText] = useState<string | null>(null);
   const [mensajeExito, setMensajeExito] = useState<string | null>(null);
   const [cargando, setCargando] = useState(false);
 
   useEffect(() => {
     setEsRegistro(search.mode === "register");
-  }, [search.mode]);
+    setTipoCuenta(search.role);
+  }, [search.mode, search.role]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorText(null);
     setMensajeExito(null);
 
-    // Validaciones básicas de cliente
     if (!email.includes("@")) {
       setErrorText("Por favor, ingrese un correo electrónico válido.");
       return;
@@ -54,6 +58,12 @@ function LoginComponent() {
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
+          options: {
+            data: {
+              nombre: nombreCompleto,
+              tipo_usuario: tipoCuenta,
+            },
+          },
         });
 
         if (error) {
@@ -63,13 +73,17 @@ function LoginComponent() {
 
         if (!data.session) {
           setMensajeExito(
-            "Cuenta registrada. Por favor revise su correo electrónico para confirmar el registro antes de ingresar."
+            "Cuenta creada con éxito. Por favor revise su correo para confirmar su cuenta antes de ingresar."
           );
           setEmail("");
           setPassword("");
+          setNombreCompleto("");
         } else {
-          // Si el proyecto no requiere confirmación y devuelve sesión directa
-          navigate({ to: "/panel" });
+          if (tipoCuenta === "ferreteria") {
+            navigate({ to: "/panel" });
+          } else {
+            navigate({ to: "/" });
+          }
         }
       } else {
         const { data, error } = await supabase.auth.signInWithPassword({
@@ -83,12 +97,21 @@ function LoginComponent() {
         }
 
         if (data.session) {
-          // Consultar rol para redirigir
           const { data: esAdmin } = await supabase.rpc("es_admin");
           if (esAdmin) {
             navigate({ to: "/admin" });
           } else {
-            navigate({ to: "/panel" });
+            const { data: ferr } = await supabase
+              .from("ferreterias")
+              .select("id")
+              .eq("owner_id", data.session.user.id)
+              .maybeSingle();
+
+            if (ferr) {
+              navigate({ to: "/panel" });
+            } else {
+              navigate({ to: "/" });
+            }
           }
         }
       }
@@ -109,25 +132,55 @@ function LoginComponent() {
             <Wrench className="h-6 w-6" />
           </div>
           <h1 className="font-display text-2xl font-bold uppercase tracking-wide text-foreground">
-            {esRegistro ? "Crear Cuenta de Ferretería" : "Ingresar a la Plataforma"}
+            {esRegistro ? "Crear una Cuenta" : "Ingresar a FerreMALL"}
           </h1>
           <p className="mt-1 text-xs text-muted-foreground">
             {esRegistro
-              ? "Registre sus credenciales para comenzar a vender"
-              : "Ingrese con sus credenciales de acceso"}
+              ? "Seleccione su perfil y complete sus datos"
+              : "Ingrese sus credenciales de acceso"}
           </p>
         </div>
 
+        {/* Selector de Rol en Registro */}
+        {esRegistro && (
+          <div className="mt-6 grid grid-cols-2 gap-2 p-1 bg-muted rounded">
+            <button
+              type="button"
+              onClick={() => setTipoCuenta("cliente")}
+              className={`flex items-center justify-center gap-1.5 py-2 text-xs font-bold uppercase tracking-wider transition-colors ${
+                tipoCuenta === "cliente"
+                  ? "bg-primary text-primary-foreground shadow"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <User className="h-3.5 w-3.5" />
+              <span>Cliente</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setTipoCuenta("ferreteria")}
+              className={`flex items-center justify-center gap-1.5 py-2 text-xs font-bold uppercase tracking-wider transition-colors ${
+                tipoCuenta === "ferreteria"
+                  ? "bg-primary text-primary-foreground shadow"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Store className="h-3.5 w-3.5" />
+              <span>Ferretería</span>
+            </button>
+          </div>
+        )}
+
         {/* Mensajes de Alerta */}
         {errorText && (
-          <div className="mt-6 flex items-start gap-2 border border-destructive/50 bg-destructive/10 p-3 text-xs text-destructive">
+          <div className="mt-4 flex items-start gap-2 border border-destructive/50 bg-destructive/10 p-3 text-xs text-destructive">
             <ShieldAlert className="h-4 w-4 shrink-0 mt-0.5" />
             <span>{errorText}</span>
           </div>
         )}
 
         {mensajeExito && (
-          <div className="mt-6 flex items-start gap-2 border border-emerald-500/50 bg-emerald-500/10 p-3 text-xs text-emerald-400">
+          <div className="mt-4 flex items-start gap-2 border border-emerald-500/50 bg-emerald-500/10 p-3 text-xs text-emerald-400">
             <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
             <span>{mensajeExito}</span>
           </div>
@@ -135,6 +188,22 @@ function LoginComponent() {
 
         {/* Formulario */}
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+          {esRegistro && (
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">
+                Nombre Completo
+              </label>
+              <input
+                type="text"
+                required
+                value={nombreCompleto}
+                onChange={(e) => setNombreCompleto(e.target.value)}
+                placeholder="Ej. Carlos Pérez"
+                className="w-full border border-border bg-input px-3 py-2 text-xs text-foreground outline-none focus:border-forge"
+              />
+            </div>
+          )}
+
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">
               Correo Electrónico
@@ -146,7 +215,7 @@ function LoginComponent() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="ferreteria@ejemplo.com"
+                placeholder="usuario@ejemplo.com"
                 className="w-full border border-border bg-input pl-9 pr-3 py-2 text-xs text-foreground outline-none focus:border-forge"
               />
             </div>
@@ -178,7 +247,7 @@ function LoginComponent() {
             {cargando
               ? "Procesando..."
               : esRegistro
-              ? "Registrar Cuenta"
+              ? "Crear Cuenta"
               : "Iniciar Sesión"}
           </button>
         </form>
@@ -187,7 +256,7 @@ function LoginComponent() {
         <div className="mt-6 border-t border-border pt-4 text-center text-xs text-muted-foreground">
           {esRegistro ? (
             <p>
-              ¿Ya tiene una cuenta creada?{" "}
+              ¿Ya tiene una cuenta?{" "}
               <button
                 type="button"
                 onClick={() => {
@@ -202,7 +271,7 @@ function LoginComponent() {
             </p>
           ) : (
             <p>
-              ¿Quiere registrar su ferretería?{" "}
+              ¿No tiene cuenta aún?{" "}
               <button
                 type="button"
                 onClick={() => {
