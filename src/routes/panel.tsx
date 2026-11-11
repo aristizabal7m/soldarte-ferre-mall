@@ -3,13 +3,13 @@ import { useState, useEffect } from "react";
 import { productos as productosIniciales, cop, type Producto } from "@/lib/soldarte";
 import { useSession } from "@/hooks/use-session";
 import { supabase } from "@/lib/supabase";
-import { Store, ShieldAlert, Clock, AlertTriangle, Plus, Trash2, Edit2, Check } from "lucide-react";
+import { Store, ShieldAlert, Clock, AlertTriangle, Plus, Trash2, Edit2, Check, Settings, Save } from "lucide-react";
 
 export const Route = createFileRoute("/panel")({
   head: () => ({
     meta: [
       { title: "Panel de Gestión | SoldArte FerreMALL" },
-      { name: "description", content: "Administre el catálogo de herramientas y materiales de su ferretería." },
+      { name: "description", content: "Administre el catálogo y perfil de su ferretería." },
     ],
   }),
   component: PanelComponent,
@@ -31,7 +31,7 @@ function PanelComponent() {
   const [ferreteria, setFerreteria] = useState<FerreteriaInfo | null>(null);
   const [cargandoFerreteria, setCargandoFerreteria] = useState(true);
 
-  // Formulario de registro de ferretería
+  // Formulario de registro inicial de ferretería
   const [nombre, setNombre] = useState("");
   const [ciudad, setCiudad] = useState("Pereira");
   const [telefono, setTelefono] = useState("");
@@ -39,7 +39,16 @@ function PanelComponent() {
   const [guardando, setGuardando] = useState(false);
   const [errorForm, setErrorForm] = useState<string | null>(null);
 
-  // Estado local del panel (contenido original preservado)
+  // Formulario de personalización / edición de perfil de ferretería
+  const [editNombre, setEditNombre] = useState("");
+  const [editCiudad, setEditCiudad] = useState("");
+  const [editTelefono, setEditTelefono] = useState("");
+  const [editDireccion, setEditDireccion] = useState("");
+  const [guardandoPerfil, setGuardandoPerfil] = useState(false);
+  const [mensajePerfilExito, setMensajePerfilExito] = useState(false);
+  const [errorPerfil, setErrorPerfil] = useState<string | null>(null);
+
+  // Estado local del panel
   const [listaProductos, setListaProductos] = useState<Producto[]>(productosIniciales);
   const [nuevoNombre, setNuevoNombre] = useState("");
   const [nuevoPrecio, setNuevoPrecio] = useState("");
@@ -68,7 +77,12 @@ function PanelComponent() {
         if (error) {
           console.error("Error al cargar ferretería:", error.message);
         } else if (data) {
-          setFerreteria(data as FerreteriaInfo);
+          const ferr = data as FerreteriaInfo;
+          setFerreteria(ferr);
+          setEditNombre(ferr.nombre);
+          setEditCiudad(ferr.ciudad);
+          setEditTelefono(ferr.telefono);
+          setEditDireccion(ferr.direccion);
         }
       } catch (err) {
         console.error("Excepción al consultar ferretería:", err);
@@ -101,7 +115,12 @@ function PanelComponent() {
       if (error) {
         setErrorForm(error.message);
       } else if (data) {
-        setFerreteria(data as FerreteriaInfo);
+        const ferr = data as FerreteriaInfo;
+        setFerreteria(ferr);
+        setEditNombre(ferr.nombre);
+        setEditCiudad(ferr.ciudad);
+        setEditTelefono(ferr.telefono);
+        setEditDireccion(ferr.direccion);
       }
     } catch (err) {
       console.error("Error al registrar ferretería:", err);
@@ -111,7 +130,42 @@ function PanelComponent() {
     }
   };
 
-  // Funciones del panel original
+  const actualizarPerfil = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!ferreteria) return;
+
+    setGuardandoPerfil(true);
+    setErrorPerfil(null);
+    setMensajePerfilExito(false);
+
+    try {
+      const { data, error } = await supabase
+        .from("ferreterias")
+        .update({
+          nombre: editNombre,
+          ciudad: editCiudad,
+          telefono: editTelefono,
+          direccion: editDireccion,
+        })
+        .eq("id", ferreteria.id)
+        .select("id, nombre, ciudad, telefono, direccion, estado")
+        .single();
+
+      if (error) {
+        setErrorPerfil(error.message);
+      } else if (data) {
+        setFerreteria(data as FerreteriaInfo);
+        setMensajePerfilExito(true);
+        setTimeout(() => setMensajePerfilExito(false), 3000);
+      }
+    } catch (err) {
+      console.error("Error al actualizar perfil:", err);
+      setErrorPerfil("No se pudo actualizar el perfil de la ferretería.");
+    } finally {
+      setGuardandoPerfil(false);
+    }
+  };
+
   const agregarProducto = (e: React.FormEvent) => {
     e.preventDefault();
     if (!nuevoNombre || !nuevoPrecio) return;
@@ -135,7 +189,6 @@ function PanelComponent() {
     setListaProductos(listaProductos.filter((p) => p.id !== id));
   };
 
-  // Renderizado condicional según estado de carga y sesión
   if (cargandoSesion || cargandoFerreteria) {
     return (
       <main className="flex min-h-[calc(100vh-8rem)] items-center justify-center bg-background">
@@ -146,7 +199,7 @@ function PanelComponent() {
     );
   }
 
-  // 1. Caso: Usuario no tiene registrada su ferretería
+  // 1. Registro de Ferretería
   if (!ferreteria) {
     return (
       <main className="flex min-h-[calc(100vh-8rem)] items-center justify-center bg-background px-4 py-12">
@@ -241,7 +294,7 @@ function PanelComponent() {
     );
   }
 
-  // 2. Caso: Solicitud pendiente de aprobación
+  // 2. Solicitud Pendiente
   if (ferreteria.estado === "pendiente") {
     return (
       <main className="flex min-h-[calc(100vh-8rem)] items-center justify-center bg-background px-4">
@@ -260,7 +313,7 @@ function PanelComponent() {
     );
   }
 
-  // 3. Caso: Solicitud rechazada
+  // 3. Solicitud Rechazada
   if (ferreteria.estado === "rechazada") {
     return (
       <main className="flex min-h-[calc(100vh-8rem)] items-center justify-center bg-background px-4">
@@ -279,17 +332,18 @@ function PanelComponent() {
     );
   }
 
-  // 4. Caso: Solicitud aprobada -> Mostrar Panel Original
+  // 4. Solicitud Aprobada
   return (
     <main className="min-h-screen bg-background py-10">
-      <div className="container mx-auto px-4">
+      <div className="container mx-auto px-4 max-w-6xl">
+        {/* Encabezado */}
         <div className="mb-8 border-b border-border pb-4 flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="font-display text-2xl font-bold uppercase tracking-wide text-foreground">
               Panel de Control - {ferreteria.nombre}
             </h1>
             <p className="text-xs text-muted-foreground">
-              Gestión de productos de la ferretería ({ferreteria.ciudad})
+              Gestión de catálogo e identidad comercial ({ferreteria.ciudad})
             </p>
           </div>
           <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-400">
@@ -298,7 +352,8 @@ function PanelComponent() {
           </span>
         </div>
 
-        <div className="grid gap-8 lg:grid-cols-3">
+        {/* Sección de Catálogo */}
+        <div className="grid gap-8 lg:grid-cols-3 mb-12">
           {/* Formulario Agregar Producto */}
           <div className="border border-border bg-card p-6 h-fit">
             <h2 className="font-display text-base font-bold uppercase text-foreground mb-4 flex items-center gap-2">
@@ -373,7 +428,7 @@ function PanelComponent() {
             </form>
           </div>
 
-          {/* Tabla / Lista de Productos */}
+          {/* Tabla de Productos */}
           <div className="lg:col-span-2 border border-border bg-card p-6">
             <h2 className="font-display text-base font-bold uppercase text-foreground mb-4">
               Catálogo Publicado ({listaProductos.length})
@@ -420,6 +475,99 @@ function PanelComponent() {
               ))}
             </div>
           </div>
+        </div>
+
+        {/* Sección al final: Personalización del Perfil de la Ferretería */}
+        <div className="border border-border bg-card p-6 md:p-8">
+          <div className="mb-6 flex items-center gap-2 border-b border-border pb-3">
+            <Settings className="h-5 w-5 text-forge" />
+            <h2 className="font-display text-lg font-bold uppercase text-foreground">
+              Personalización del Perfil de la Ferretería
+            </h2>
+          </div>
+
+          {mensajePerfilExito && (
+            <div className="mb-4 flex items-center gap-2 border border-emerald-500/50 bg-emerald-500/10 p-3 text-xs text-emerald-400">
+              <Check className="h-4 w-4 shrink-0" />
+              <span>Información de la ferretería actualizada correctamente.</span>
+            </div>
+          )}
+
+          {errorPerfil && (
+            <div className="mb-4 flex items-center gap-2 border border-destructive/50 bg-destructive/10 p-3 text-xs text-destructive">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              <span>{errorPerfil}</span>
+            </div>
+          )}
+
+          <form onSubmit={actualizarPerfil} className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">
+                  Nombre Comercial
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editNombre}
+                  onChange={(e) => setEditNombre(e.target.value)}
+                  className="w-full border border-border bg-input px-3 py-2 text-xs text-foreground outline-none focus:border-forge"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">
+                  Ciudad
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editCiudad}
+                  onChange={(e) => setEditCiudad(e.target.value)}
+                  className="w-full border border-border bg-input px-3 py-2 text-xs text-foreground outline-none focus:border-forge"
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">
+                  Teléfono de Contacto
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editTelefono}
+                  onChange={(e) => setEditTelefono(e.target.value)}
+                  className="w-full border border-border bg-input px-3 py-2 text-xs text-foreground outline-none focus:border-forge"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">
+                  Dirección Comercial
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editDireccion}
+                  onChange={(e) => setEditDireccion(e.target.value)}
+                  className="w-full border border-border bg-input px-3 py-2 text-xs text-foreground outline-none focus:border-forge"
+                />
+              </div>
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                type="submit"
+                disabled={guardandoPerfil}
+                className="inline-flex items-center gap-2 bg-primary px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              >
+                <Save className="h-4 w-4" />
+                <span>{guardandoPerfil ? "Guardando..." : "Guardar Cambios del Perfil"}</span>
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     </main>
