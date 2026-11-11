@@ -10,13 +10,22 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AdminRouteImport } from './routes/admin'
 import { Route as CotizarRouteImport } from './routes/cotizar'
 import { Route as HerramientasRouteImport } from './routes/herramientas'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as PanelRouteImport } from './routes/panel'
+import { Route as VenderRouteImport } from './routes/vender'
+import { Route as FerreteriaIdRouteImport } from './routes/ferreteria.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CotizarRoute = CotizarRouteImport.update({
@@ -29,44 +38,100 @@ const HerramientasRoute = HerramientasRouteImport.update({
   path: '/herramientas',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PanelRoute = PanelRouteImport.update({
   id: '/panel',
   path: '/panel',
   getParentRoute: () => rootRouteImport,
 } as any)
+const VenderRoute = VenderRouteImport.update({
+  id: '/vender',
+  path: '/vender',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FerreteriaIdRoute = FerreteriaIdRouteImport.update({
+  id: '/ferreteria/$id',
+  path: '/ferreteria/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
   '/cotizar': typeof CotizarRoute
   '/herramientas': typeof HerramientasRoute
+  '/login': typeof LoginRoute
   '/panel': typeof PanelRoute
+  '/vender': typeof VenderRoute
+  '/ferreteria/$id': typeof FerreteriaIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
   '/cotizar': typeof CotizarRoute
   '/herramientas': typeof HerramientasRoute
+  '/login': typeof LoginRoute
   '/panel': typeof PanelRoute
+  '/vender': typeof VenderRoute
+  '/ferreteria/$id': typeof FerreteriaIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
   '/cotizar': typeof CotizarRoute
   '/herramientas': typeof HerramientasRoute
+  '/login': typeof LoginRoute
   '/panel': typeof PanelRoute
+  '/vender': typeof VenderRoute
+  '/ferreteria/$id': typeof FerreteriaIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/cotizar' | '/herramientas' | '/panel'
+  fullPaths:
+    | '/'
+    | '/admin'
+    | '/cotizar'
+    | '/herramientas'
+    | '/login'
+    | '/panel'
+    | '/vender'
+    | '/ferreteria/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/cotizar' | '/herramientas' | '/panel'
-  id: '__root__' | '/' | '/cotizar' | '/herramientas' | '/panel'
+  to:
+    | '/'
+    | '/admin'
+    | '/cotizar'
+    | '/herramientas'
+    | '/login'
+    | '/panel'
+    | '/vender'
+    | '/ferreteria/$id'
+  id:
+    | '__root__'
+    | '/'
+    | '/admin'
+    | '/cotizar'
+    | '/herramientas'
+    | '/login'
+    | '/panel'
+    | '/vender'
+    | '/ferreteria/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AdminRoute: typeof AdminRoute
   CotizarRoute: typeof CotizarRoute
   HerramientasRoute: typeof HerramientasRoute
+  LoginRoute: typeof LoginRoute
   PanelRoute: typeof PanelRoute
+  VenderRoute: typeof VenderRoute
+  FerreteriaIdRoute: typeof FerreteriaIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -76,6 +141,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/cotizar': {
@@ -92,6 +164,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof HerramientasRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/panel': {
       id: '/panel'
       path: '/panel'
@@ -99,14 +178,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PanelRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/vender': {
+      id: '/vender'
+      path: '/vender'
+      fullPath: '/vender'
+      preLoaderRoute: typeof VenderRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ferreteria/$id': {
+      id: '/ferreteria/$id'
+      path: '/ferreteria/$id'
+      fullPath: '/ferreteria/$id'
+      preLoaderRoute: typeof FerreteriaIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AdminRoute: AdminRoute,
   CotizarRoute: CotizarRoute,
   HerramientasRoute: HerramientasRoute,
+  LoginRoute: LoginRoute,
   PanelRoute: PanelRoute,
+  VenderRoute: VenderRoute,
+  FerreteriaIdRoute: FerreteriaIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

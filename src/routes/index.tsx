@@ -212,3 +212,23 @@ function IndexComponent() {
                 </p>
               </div>
             </div>
+
+            <div className="flex items-start gap-4 rounded-lg border border-border bg-card p-4">
+              <div className="rounded bg-forge/10 p-2 text-forge">
+                <ShieldCheck className="h-6 w-6" />
+              </div>
+              <div>
+                <h3 className="font-display text-sm font-bold uppercase text-foreground">
+                  Cuentas Seguras
+                </h3>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Sus datos de compra y pedidos quedan almacenados de manera privada en su cuenta.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  );
+}
