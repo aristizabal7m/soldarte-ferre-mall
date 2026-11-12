@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useSession } from "@/hooks/use-session";
-import { Store, MapPin, Phone, ArrowRight, ShieldCheck, ShoppingBag, UserCheck } from "lucide-react";
+import { Store, MapPin, Phone, ArrowRight, ShieldCheck, ShoppingBag } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -86,24 +86,13 @@ function IndexComponent() {
           </p>
 
           <div className="mt-8 flex flex-wrap justify-center gap-4">
-            {!session ? (
-              <Link
-                to="/login"
-                search={{ mode: "register", role: "cliente" }}
-                className="inline-flex items-center gap-2 bg-primary px-6 py-3 text-sm font-bold uppercase tracking-wider text-primary-foreground transition-colors hover:bg-primary/90"
-              >
-                <UserCheck className="h-4 w-4" />
-                <span>Crear Cuenta de Cliente</span>
-              </Link>
-            ) : (
-              <a
-                href="#directorio"
-                className="inline-flex items-center gap-2 bg-primary px-6 py-3 text-sm font-bold uppercase tracking-wider text-primary-foreground transition-colors hover:bg-primary/90"
-              >
-                <span>Explorar Ferreterías</span>
-                <ArrowRight className="h-4 w-4" />
-              </a>
-            )}
+            <a
+              href="#directorio"
+              className="inline-flex items-center gap-2 bg-primary px-6 py-3 text-sm font-bold uppercase tracking-wider text-primary-foreground transition-colors hover:bg-primary/90"
+            >
+              <span>Explorar Ferreterías</span>
+              <ArrowRight className="h-4 w-4" />
+            </a>
 
             {!session && (
               <Link

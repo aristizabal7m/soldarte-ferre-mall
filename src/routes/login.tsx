@@ -3,15 +3,26 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { Wrench, ShieldAlert, CheckCircle2, Lock, Mail, User, Store } from "lucide-react";
 
+function sanitizarRedirect(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const trimmed = raw.trim();
+  // Debe comenzar con una sola barra "/" y nunca con "//" ni contener protocolos externos
+  if (trimmed.startsWith("/") && !trimmed.startsWith("//") && !trimmed.includes("://")) {
+    return trimmed;
+  }
+  return undefined;
+}
+
 export const Route = createFileRoute("/login")({
   validateSearch: (search: Record<string, unknown>) => ({
     mode: search.mode === "register" ? "register" : "login",
     role: search.role === "ferreteria" ? "ferreteria" : "cliente",
+    redirect: sanitizarRedirect(search.redirect),
   }),
   head: () => ({
     meta: [
       { title: "Acceso | SoldArte FerreMALL" },
-      { name: "description", content: "Inicie sesión o regístrese para comprar o vender en la plataforma." },
+      { name: "description", content: "Inicie sesión o regístrese para finalizar su compra o gestionar su ferretería." },
     ],
   }),
   component: LoginComponent,
@@ -26,7 +37,7 @@ function LoginComponent() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [nombreCompleto, setNombreCompleto] = useState("");
+  const [aceptaDatos, setAceptaDatos] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [mensajeExito, setMensajeExito] = useState<string | null>(null);
   const [cargando, setCargando] = useState(false);
@@ -35,6 +46,31 @@ function LoginComponent() {
     setEsRegistro(search.mode === "register");
     setTipoCuenta(search.role);
   }, [search.mode, search.role]);
+
+  const redirigirDestino = async (userId: string) => {
+    if (search.redirect) {
+      navigate({ to: search.redirect as never });
+      return;
+    }
+
+    const { data: esAdmin } = await supabase.rpc("es_admin");
+    if (esAdmin) {
+      navigate({ to: "/admin" });
+      return;
+    }
+
+    const { data: ferr } = await supabase
+      .from("ferreterias")
+      .select("id")
+      .eq("owner_id", userId)
+      .maybeSingle();
+
+    if (ferr || tipoCuenta === "ferreteria") {
+      navigate({ to: "/panel" });
+    } else {
+      navigate({ to: "/" });
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,6 +87,11 @@ function LoginComponent() {
       return;
     }
 
+    if (esRegistro && !aceptaDatos) {
+      setErrorText("Debe autorizar el tratamiento de datos personales (Ley 1581) para continuar.");
+      return;
+    }
+
     setCargando(true);
 
     try {
@@ -60,7 +101,6 @@ function LoginComponent() {
           password,
           options: {
             data: {
-              nombre: nombreCompleto,
               tipo_usuario: tipoCuenta,
             },
           },
@@ -73,17 +113,12 @@ function LoginComponent() {
 
         if (!data.session) {
           setMensajeExito(
-            "Cuenta creada con éxito. Por favor revise su correo para confirmar su cuenta antes de ingresar."
+            "Cuenta creada con éxito. Revise su correo para confirmar su cuenta; su carrito seguirá guardado al regresar."
           );
           setEmail("");
           setPassword("");
-          setNombreCompleto("");
         } else {
-          if (tipoCuenta === "ferreteria") {
-            navigate({ to: "/panel" });
-          } else {
-            navigate({ to: "/" });
-          }
+          await redirigirDestino(data.session.user.id);
         }
       } else {
         const { data, error } = await supabase.auth.signInWithPassword({
@@ -97,22 +132,7 @@ function LoginComponent() {
         }
 
         if (data.session) {
-          const { data: esAdmin } = await supabase.rpc("es_admin");
-          if (esAdmin) {
-            navigate({ to: "/admin" });
-          } else {
-            const { data: ferr } = await supabase
-              .from("ferreterias")
-              .select("id")
-              .eq("owner_id", data.session.user.id)
-              .maybeSingle();
-
-            if (ferr) {
-              navigate({ to: "/panel" });
-            } else {
-              navigate({ to: "/" });
-            }
-          }
+          await redirigirDestino(data.session.user.id);
         }
       }
     } catch (err) {
@@ -126,7 +146,6 @@ function LoginComponent() {
   return (
     <main className="flex min-h-[calc(100vh-8rem)] items-center justify-center bg-background px-4 py-12">
       <div className="w-full max-w-md border border-border bg-card p-6 sm:p-8 shadow-2xl">
-        {/* Encabezado */}
         <div className="text-center">
           <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-forge/10 text-forge">
             <Wrench className="h-6 w-6" />
@@ -135,15 +154,17 @@ function LoginComponent() {
             {esRegistro ? "Crear una Cuenta" : "Ingresar a FerreMALL"}
           </h1>
           <p className="mt-1 text-xs text-muted-foreground">
-            {esRegistro
+            {search.redirect
+              ? "Inicie sesión o cree su cuenta para completar su pedido"
+              : esRegistro
               ? "Seleccione su perfil y complete sus datos"
               : "Ingrese sus credenciales de acceso"}
           </p>
         </div>
 
-        {/* Selector de Rol en Registro */}
-        {esRegistro && (
-          <div className="mt-6 grid grid-cols-2 gap-2 p-1 bg-muted rounded">
+        {/* Selector de Rol en Registro (oculto si viene directo desde el carrito de compra) */}
+        {esRegistro && !search.redirect && (
+          <div className="mt-6 grid grid-cols-2 gap-2 rounded bg-muted p-1">
             <button
               type="button"
               onClick={() => setTipoCuenta("cliente")}
@@ -171,7 +192,6 @@ function LoginComponent() {
           </div>
         )}
 
-        {/* Mensajes de Alerta */}
         {errorText && (
           <div className="mt-4 flex items-start gap-2 border border-destructive/50 bg-destructive/10 p-3 text-xs text-destructive">
             <ShieldAlert className="h-4 w-4 shrink-0 mt-0.5" />
@@ -186,24 +206,7 @@ function LoginComponent() {
           </div>
         )}
 
-        {/* Formulario */}
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-          {esRegistro && (
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">
-                Nombre Completo
-              </label>
-              <input
-                type="text"
-                required
-                value={nombreCompleto}
-                onChange={(e) => setNombreCompleto(e.target.value)}
-                placeholder="Ej. Carlos Pérez"
-                className="w-full border border-border bg-input px-3 py-2 text-xs text-foreground outline-none focus:border-forge"
-              />
-            </div>
-          )}
-
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">
               Correo Electrónico
@@ -239,6 +242,20 @@ function LoginComponent() {
             </div>
           </div>
 
+          {esRegistro && (
+            <label className="flex items-start gap-2 text-[11px] text-muted-foreground cursor-pointer select-none pt-1">
+              <input
+                type="checkbox"
+                checked={aceptaDatos}
+                onChange={(e) => setAceptaDatos(e.target.checked)}
+                className="mt-0.5 accent-forge"
+              />
+              <span>
+                Autorizo el tratamiento de mis datos personales para gestionar mis pedidos conforme a la Ley 1581 de 2012.
+              </span>
+            </label>
+          )}
+
           <button
             type="submit"
             disabled={cargando}
@@ -247,12 +264,11 @@ function LoginComponent() {
             {cargando
               ? "Procesando..."
               : esRegistro
-              ? "Crear Cuenta"
+              ? "Crear Cuenta y Continuar"
               : "Iniciar Sesión"}
           </button>
         </form>
 
-        {/* Alternador de Modo */}
         <div className="mt-6 border-t border-border pt-4 text-center text-xs text-muted-foreground">
           {esRegistro ? (
             <p>
