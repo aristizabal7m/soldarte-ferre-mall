@@ -1,9 +1,21 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { productos as productosIniciales, cop, type Producto } from "@/lib/soldarte";
+import { cop } from "@/lib/soldarte";
 import { useSession } from "@/hooks/use-session";
 import { supabase } from "@/lib/supabase";
-import { Store, ShieldAlert, Clock, AlertTriangle, Plus, Trash2, Edit2, Check, Settings, Save } from "lucide-react";
+import {
+  Store,
+  ShieldAlert,
+  Clock,
+  AlertTriangle,
+  Plus,
+  Trash2,
+  Check,
+  Settings,
+  Save,
+  Eye,
+  EyeOff,
+} from "lucide-react";
 
 export const Route = createFileRoute("/panel")({
   head: () => ({
@@ -21,7 +33,18 @@ interface FerreteriaInfo {
   ciudad: string;
   telefono: string;
   direccion: string;
-  estado: "pendiente" | "aprobada" | "rechazada";
+  estado: "pendiente" | "aprobada" | "rechazada" | "suspendida";
+}
+
+interface ProductoDB {
+  id: string;
+  ferreteria_id: string;
+  nombre: string;
+  descripcion: string | null;
+  precio: number;
+  stock: number;
+  categoria: string | null;
+  disponible: boolean;
 }
 
 function PanelComponent() {
@@ -33,7 +56,7 @@ function PanelComponent() {
 
   // Formulario de registro inicial de ferretería
   const [nombre, setNombre] = useState("");
-  const [ciudad, setCiudad] = useState("Pereira");
+  const [ciudad, setCiudad] = useState("Armenia");
   const [telefono, setTelefono] = useState("");
   const [direccion, setDireccion] = useState("");
   const [guardando, setGuardando] = useState(false);
@@ -48,15 +71,18 @@ function PanelComponent() {
   const [mensajePerfilExito, setMensajePerfilExito] = useState(false);
   const [errorPerfil, setErrorPerfil] = useState<string | null>(null);
 
-  // Estado local del panel
-  const [listaProductos, setListaProductos] = useState<Producto[]>(productosIniciales);
+  // Estado real del catálogo en Supabase
+  const [listaProductos, setListaProductos] = useState<ProductoDB[]>([]);
+  const [cargandoProductos, setCargandoProductos] = useState(false);
   const [nuevoNombre, setNuevoNombre] = useState("");
   const [nuevoPrecio, setNuevoPrecio] = useState("");
+  const [nuevoStock, setNuevoStock] = useState("10");
   const [nuevaCategoria, setNuevaCategoria] = useState("Herramientas");
-  const [nuevoDetalle, setNuevoDetalle] = useState("");
-  const [editandoId, setEditandoId] = useState<string | null>(null);
+  const [nuevaDescripcion, setNuevaDescripcion] = useState("");
+  const [guardandoProducto, setGuardandoProducto] = useState(false);
+  const [errorProducto, setErrorProducto] = useState<string | null>(null);
 
-  // Cargar información de la ferretería del usuario
+  // Cargar información de la ferretería y sus productos reales
   useEffect(() => {
     if (cargandoSesion) return;
 
@@ -65,13 +91,13 @@ function PanelComponent() {
       return;
     }
 
-    async function cargarFerreteria() {
+    async function cargarFerreteriaYProductos() {
       setCargandoFerreteria(true);
       try {
         const { data, error } = await supabase
           .from("ferreterias")
           .select("id, nombre, ciudad, telefono, direccion, estado")
-          .eq("owner_id", user.id)
+          .eq("owner_id", user!.id)
           .maybeSingle();
 
         if (error) {
@@ -83,6 +109,21 @@ function PanelComponent() {
           setEditCiudad(ferr.ciudad);
           setEditTelefono(ferr.telefono);
           setEditDireccion(ferr.direccion);
+
+          // Cargar productos reales de esta ferretería
+          setCargandoProductos(true);
+          const { data: prods, error: prodErr } = await supabase
+            .from("productos")
+            .select("id, ferreteria_id, nombre, descripcion, precio, stock, categoria, disponible")
+            .eq("ferreteria_id", ferr.id)
+            .order("created_at", { ascending: false });
+
+          if (prodErr) {
+            console.error("Error al cargar productos:", prodErr.message);
+          } else if (prods) {
+            setListaProductos(prods as ProductoDB[]);
+          }
+          setCargandoProductos(false);
         }
       } catch (err) {
         console.error("Excepción al consultar ferretería:", err);
@@ -91,7 +132,7 @@ function PanelComponent() {
       }
     }
 
-    cargarFerreteria();
+    cargarFerreteriaYProductos();
   }, [user, cargandoSesion, navigate]);
 
   const registrarFerreteria = async (e: React.FormEvent) => {
@@ -166,27 +207,72 @@ function PanelComponent() {
     }
   };
 
-  const agregarProducto = (e: React.FormEvent) => {
+  const agregarProducto = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nuevoNombre || !nuevoPrecio) return;
+    if (!ferreteria || !nuevoNombre.trim() || !nuevoPrecio) return;
 
-    const prod: Producto = {
-      id: Date.now().toString(),
-      nombre: nuevoNombre,
-      precio: Number(nuevoPrecio),
-      categoria: nuevaCategoria,
-      detalle: nuevoDetalle || "Sin descripción",
-      imagen: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=400&auto=format&fit=crop&q=60",
-    };
+    setGuardandoProducto(true);
+    setErrorProducto(null);
 
-    setListaProductos([prod, ...listaProductos]);
-    setNuevoNombre("");
-    setNuevoPrecio("");
-    setNuevoDetalle("");
+    try {
+      const { data, error } = await supabase
+        .from("productos")
+        .insert({
+          ferreteria_id: ferreteria.id,
+          nombre: nuevoNombre.trim(),
+          precio: Number(nuevoPrecio),
+          stock: Math.max(0, Number(nuevoStock) || 0),
+          categoria: nuevaCategoria,
+          descripcion: nuevaDescripcion.trim() || null,
+          disponible: true,
+        })
+        .select("id, ferreteria_id, nombre, descripcion, precio, stock, categoria, disponible")
+        .single();
+
+      if (error) {
+        setErrorProducto(error.message);
+        return;
+      }
+
+      if (data) {
+        setListaProductos([data as ProductoDB, ...listaProductos]);
+        setNuevoNombre("");
+        setNuevoPrecio("");
+        setNuevoStock("10");
+        setNuevaDescripcion("");
+      }
+    } catch (err) {
+      console.error("Error al agregar producto:", err);
+      setErrorProducto("Ocurrió un error inesperado al guardar el producto.");
+    } finally {
+      setGuardandoProducto(false);
+    }
   };
 
-  const eliminarProducto = (id: string) => {
-    setListaProductos(listaProductos.filter((p) => p.id !== id));
+  const toggleDisponibilidad = async (prod: ProductoDB) => {
+    const nuevoEstado = !prod.disponible;
+    const { error } = await supabase
+      .from("productos")
+      .update({ disponible: nuevoEstado })
+      .eq("id", prod.id);
+
+    if (!error) {
+      setListaProductos(
+        listaProductos.map((p) => (p.id === prod.id ? { ...p, disponible: nuevoEstado } : p))
+      );
+    } else {
+      setErrorProducto(error.message);
+    }
+  };
+
+  const eliminarProducto = async (id: string) => {
+    const { error } = await supabase.from("productos").delete().eq("id", id);
+
+    if (!error) {
+      setListaProductos(listaProductos.filter((p) => p.id !== id));
+    } else {
+      setErrorProducto(error.message);
+    }
   };
 
   if (cargandoSesion || cargandoFerreteria) {
@@ -313,8 +399,8 @@ function PanelComponent() {
     );
   }
 
-  // 3. Solicitud Rechazada
-  if (ferreteria.estado === "rechazada") {
+  // 3. Solicitud Rechazada o Suspendida
+  if (ferreteria.estado === "rechazada" || ferreteria.estado === "suspendida") {
     return (
       <main className="flex min-h-[calc(100vh-8rem)] items-center justify-center bg-background px-4">
         <div className="max-w-md border border-destructive/50 bg-card p-8 text-center shadow-2xl">
@@ -322,10 +408,12 @@ function PanelComponent() {
             <ShieldAlert className="h-7 w-7" />
           </div>
           <h2 className="font-display text-xl font-bold uppercase text-foreground">
-            Solicitud no aprobada
+            {ferreteria.estado === "suspendida" ? "Comercio Suspendido" : "Solicitud no aprobada"}
           </h2>
           <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
-            La inscripción de la ferretería <strong className="text-foreground">{ferreteria.nombre}</strong> no ha sido aprobada en este momento. Por favor contacte con soporte técnico para más información.
+            {ferreteria.estado === "suspendida"
+              ? `La operación de ${ferreteria.nombre} se encuentra temporalmente suspendida por administración. Su catálogo está oculto al público.`
+              : `La inscripción de la ferretería ${ferreteria.nombre} no ha sido aprobada en este momento.`}
           </p>
         </div>
       </main>
@@ -343,7 +431,7 @@ function PanelComponent() {
               Panel de Control - {ferreteria.nombre}
             </h1>
             <p className="text-xs text-muted-foreground">
-              Gestión de catálogo e identidad comercial ({ferreteria.ciudad})
+              Gestión de catálogo real e identidad comercial ({ferreteria.ciudad})
             </p>
           </div>
           <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-400">
@@ -361,6 +449,13 @@ function PanelComponent() {
               <span>Nuevo Producto</span>
             </h2>
 
+            {errorProducto && (
+              <div className="mb-4 flex items-center gap-2 border border-destructive/50 bg-destructive/10 p-3 text-xs text-destructive">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                <span>{errorProducto}</span>
+              </div>
+            )}
+
             <form onSubmit={agregarProducto} className="space-y-4 text-xs">
               <div>
                 <label className="block font-bold uppercase text-muted-foreground mb-1">
@@ -371,23 +466,40 @@ function PanelComponent() {
                   required
                   value={nuevoNombre}
                   onChange={(e) => setNuevoNombre(e.target.value)}
-                  placeholder="Ej. Soldador Inverter 200A"
+                  placeholder="Ej. Taladro Percutor 1/2"
                   className="w-full border border-border bg-input px-3 py-2 text-foreground outline-none focus:border-forge"
                 />
               </div>
 
-              <div>
-                <label className="block font-bold uppercase text-muted-foreground mb-1">
-                  Precio (COP)
-                </label>
-                <input
-                  type="number"
-                  required
-                  value={nuevoPrecio}
-                  onChange={(e) => setNuevoPrecio(e.target.value)}
-                  placeholder="450000"
-                  className="w-full border border-border bg-input px-3 py-2 text-foreground outline-none focus:border-forge"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold uppercase text-muted-foreground mb-1">
+                    Precio (COP)
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    required
+                    value={nuevoPrecio}
+                    onChange={(e) => setNuevoPrecio(e.target.value)}
+                    placeholder="250000"
+                    className="w-full border border-border bg-input px-3 py-2 text-foreground outline-none focus:border-forge"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold uppercase text-muted-foreground mb-1">
+                    Stock
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    required
+                    value={nuevoStock}
+                    onChange={(e) => setNuevoStock(e.target.value)}
+                    className="w-full border border-border bg-input px-3 py-2 text-foreground outline-none focus:border-forge"
+                  />
+                </div>
               </div>
 
               <div>
@@ -401,6 +513,7 @@ function PanelComponent() {
                 >
                   <option value="Herramientas">Herramientas</option>
                   <option value="Equipos">Equipos</option>
+                  <option value="Materiales">Materiales</option>
                   <option value="Insumos">Insumos</option>
                   <option value="Seguridad">Seguridad</option>
                 </select>
@@ -408,12 +521,12 @@ function PanelComponent() {
 
               <div>
                 <label className="block font-bold uppercase text-muted-foreground mb-1">
-                  Detalle / Especificaciones
+                  Descripción / Especificaciones
                 </label>
                 <textarea
                   rows={3}
-                  value={nuevoDetalle}
-                  onChange={(e) => setNuevoDetalle(e.target.value)}
+                  value={nuevaDescripcion}
+                  onChange={(e) => setNuevaDescripcion(e.target.value)}
                   placeholder="Descripción del artículo..."
                   className="w-full border border-border bg-input px-3 py-2 text-foreground outline-none focus:border-forge"
                 />
@@ -421,59 +534,90 @@ function PanelComponent() {
 
               <button
                 type="submit"
-                className="w-full bg-primary py-2 font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/90"
+                disabled={guardandoProducto}
+                className="w-full bg-primary py-2 font-bold uppercase tracking-wider text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
               >
-                Agregar al Catálogo
+                {guardandoProducto ? "Guardando..." : "Publicar en Catálogo"}
               </button>
             </form>
           </div>
 
-          {/* Tabla de Productos */}
+          {/* Lista de Productos Reales */}
           <div className="lg:col-span-2 border border-border bg-card p-6">
             <h2 className="font-display text-base font-bold uppercase text-foreground mb-4">
               Catálogo Publicado ({listaProductos.length})
             </h2>
 
-            <div className="space-y-3">
-              {listaProductos.map((p) => (
-                <div
-                  key={p.id}
-                  className="flex flex-wrap items-center justify-between border border-border bg-background p-3 gap-3"
-                >
-                  <div className="flex-1 min-w-[200px]">
-                    <span className="text-[10px] font-bold uppercase text-forge bg-forge/10 px-1.5 py-0.5 rounded">
-                      {p.categoria}
-                    </span>
-                    <h3 className="font-display text-sm font-bold text-foreground mt-1">
-                      {p.nombre}
-                    </h3>
-                    <p className="text-xs text-muted-foreground line-clamp-1">{p.detalle}</p>
-                  </div>
+            {cargandoProductos ? (
+              <p className="text-xs text-muted-foreground animate-pulse py-8 text-center">
+                Cargando inventario...
+              </p>
+            ) : listaProductos.length === 0 ? (
+              <div className="border border-border bg-background p-8 text-center text-xs text-muted-foreground">
+                Aún no tienes productos registrados. Agrega el primero desde el formulario de la izquierda.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {listaProductos.map((p) => (
+                  <div
+                    key={p.id}
+                    className={`flex flex-wrap items-center justify-between border border-border bg-background p-3 gap-3 ${
+                      !p.disponible ? "opacity-60" : ""
+                    }`}
+                  >
+                    <div className="flex-1 min-w-[200px]">
+                      <div className="flex items-center gap-2">
+                        {p.categoria && (
+                          <span className="text-[10px] font-bold uppercase text-forge bg-forge/10 px-1.5 py-0.5 rounded">
+                            {p.categoria}
+                          </span>
+                        )}
+                        <span className="text-[10px] text-muted-foreground">
+                          Stock: {p.stock}
+                        </span>
+                        {!p.disponible && (
+                          <span className="text-[10px] font-bold uppercase text-amber-400">
+                            (Oculto al público)
+                          </span>
+                        )}
+                      </div>
+                      <h3 className="font-display text-sm font-bold text-foreground mt-1">
+                        {p.nombre}
+                      </h3>
+                      <p className="text-xs text-muted-foreground line-clamp-1">
+                        {p.descripcion || "Sin descripción"}
+                      </p>
+                    </div>
 
-                  <div className="flex items-center gap-4">
-                    <span className="font-display text-sm font-bold text-foreground">
-                      {cop(p.precio)}
-                    </span>
-                    <div className="flex gap-1">
-                      <button
-                        onClick={() => setEditandoId(editandoId === p.id ? null : p.id)}
-                        className="p-1 text-muted-foreground hover:text-foreground"
-                        title="Editar"
-                      >
-                        <Edit2 className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => eliminarProducto(p.id)}
-                        className="p-1 text-muted-foreground hover:text-destructive"
-                        title="Eliminar"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                    <div className="flex items-center gap-4">
+                      <span className="font-display text-sm font-bold text-foreground">
+                        {cop(p.precio)}
+                      </span>
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => toggleDisponibilidad(p)}
+                          className="p-1 text-muted-foreground hover:text-foreground"
+                          title={p.disponible ? "Ocultar producto" : "Mostrar producto"}
+                        >
+                          {p.disponible ? (
+                            <Eye className="h-4 w-4 text-emerald-400" />
+                          ) : (
+                            <EyeOff className="h-4 w-4 text-amber-400" />
+                          )}
+                        </button>
+                        <button
+                          onClick={() => eliminarProducto(p.id)}
+                          className="p-1 text-muted-foreground hover:text-destructive"
+                          title="Eliminar de la base de datos"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
