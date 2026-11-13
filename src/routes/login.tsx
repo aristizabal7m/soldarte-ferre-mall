@@ -1,12 +1,12 @@
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
-import { Wrench, ShieldAlert, CheckCircle2, Lock, Mail, User, Store } from "lucide-react";
+import { useSession } from "@/hooks/use-session";
+import { Wrench, ShieldAlert, CheckCircle2, Lock, Mail } from "lucide-react";
 
 function sanitizarRedirect(raw: unknown): string | undefined {
   if (typeof raw !== "string") return undefined;
   const trimmed = raw.trim();
-  // Debe comenzar con una sola barra "/" y nunca con "//" ni contener protocolos externos
   if (trimmed.startsWith("/") && !trimmed.startsWith("//") && !trimmed.includes("://")) {
     return trimmed;
   }
@@ -16,13 +16,12 @@ function sanitizarRedirect(raw: unknown): string | undefined {
 export const Route = createFileRoute("/login")({
   validateSearch: (search: Record<string, unknown>) => ({
     mode: search.mode === "register" ? "register" : "login",
-    role: search.role === "ferreteria" ? "ferreteria" : "cliente",
     redirect: sanitizarRedirect(search.redirect),
   }),
   head: () => ({
     meta: [
       { title: "Acceso | SoldArte FerreMALL" },
-      { name: "description", content: "Inicie sesión o regístrese para finalizar su compra o gestionar su ferretería." },
+      { name: "description", content: "Inicie sesión o cree su cuenta en SoldArte FerreMALL." },
     ],
   }),
   component: LoginComponent,
@@ -31,10 +30,9 @@ export const Route = createFileRoute("/login")({
 function LoginComponent() {
   const navigate = useNavigate();
   const search = useSearch({ from: "/login" });
+  const { user, cargando: cargandoSesion } = useSession();
 
   const [esRegistro, setEsRegistro] = useState(search.mode === "register");
-  const [tipoCuenta, setTipoCuenta] = useState<"cliente" | "ferreteria">(search.role);
-
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [aceptaDatos, setAceptaDatos] = useState(false);
@@ -44,8 +42,7 @@ function LoginComponent() {
 
   useEffect(() => {
     setEsRegistro(search.mode === "register");
-    setTipoCuenta(search.role);
-  }, [search.mode, search.role]);
+  }, [search.mode]);
 
   const redirigirDestino = async (userId: string) => {
     if (search.redirect) {
@@ -65,12 +62,19 @@ function LoginComponent() {
       .eq("owner_id", userId)
       .maybeSingle();
 
-    if (ferr || tipoCuenta === "ferreteria") {
+    if (ferr) {
       navigate({ to: "/panel" });
     } else {
       navigate({ to: "/" });
     }
   };
+
+  // Si el usuario llega tras confirmar su correo en Supabase, redirigir automáticamente
+  useEffect(() => {
+    if (!cargandoSesion && user) {
+      redirigirDestino(user.id);
+    }
+  }, [user, cargandoSesion]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,13 +100,14 @@ function LoginComponent() {
 
     try {
       if (esRegistro) {
+        const redirectUrl =
+          typeof window !== "undefined" ? `${window.location.origin}/login` : undefined;
+
         const { data, error } = await supabase.auth.signUp({
-          email,
+          email: email.trim(),
           password,
           options: {
-            data: {
-              tipo_usuario: tipoCuenta,
-            },
+            emailRedirectTo: redirectUrl,
           },
         });
 
@@ -113,7 +118,7 @@ function LoginComponent() {
 
         if (!data.session) {
           setMensajeExito(
-            "Cuenta creada con éxito. Revise su correo para confirmar su cuenta; su carrito seguirá guardado al regresar."
+            "Cuenta creada. Revise su bandeja de entrada y haga clic en el enlace de confirmación para activar su cuenta."
           );
           setEmail("");
           setPassword("");
@@ -122,7 +127,7 @@ function LoginComponent() {
         }
       } else {
         const { data, error } = await supabase.auth.signInWithPassword({
-          email,
+          email: email.trim(),
           password,
         });
 
@@ -155,42 +160,12 @@ function LoginComponent() {
           </h1>
           <p className="mt-1 text-xs text-muted-foreground">
             {search.redirect
-              ? "Inicie sesión o cree su cuenta para completar su pedido"
+              ? "Inicie sesión o regístrese para continuar con su solicitud"
               : esRegistro
-              ? "Seleccione su perfil y complete sus datos"
+              ? "Cree su cuenta única para comprar o registrar su ferretería"
               : "Ingrese sus credenciales de acceso"}
           </p>
         </div>
-
-        {/* Selector de Rol en Registro (oculto si viene directo desde el carrito de compra) */}
-        {esRegistro && !search.redirect && (
-          <div className="mt-6 grid grid-cols-2 gap-2 rounded bg-muted p-1">
-            <button
-              type="button"
-              onClick={() => setTipoCuenta("cliente")}
-              className={`flex items-center justify-center gap-1.5 py-2 text-xs font-bold uppercase tracking-wider transition-colors ${
-                tipoCuenta === "cliente"
-                  ? "bg-primary text-primary-foreground shadow"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <User className="h-3.5 w-3.5" />
-              <span>Cliente</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setTipoCuenta("ferreteria")}
-              className={`flex items-center justify-center gap-1.5 py-2 text-xs font-bold uppercase tracking-wider transition-colors ${
-                tipoCuenta === "ferreteria"
-                  ? "bg-primary text-primary-foreground shadow"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <Store className="h-3.5 w-3.5" />
-              <span>Ferretería</span>
-            </button>
-          </div>
-        )}
 
         {errorText && (
           <div className="mt-4 flex items-start gap-2 border border-destructive/50 bg-destructive/10 p-3 text-xs text-destructive">
@@ -251,7 +226,7 @@ function LoginComponent() {
                 className="mt-0.5 accent-forge"
               />
               <span>
-                Autorizo el tratamiento de mis datos personales para gestionar mis pedidos conforme a la Ley 1581 de 2012.
+                Autorizo el tratamiento de mis datos personales conforme a la Ley 1581 de 2012.
               </span>
             </label>
           )}
@@ -264,7 +239,7 @@ function LoginComponent() {
             {cargando
               ? "Procesando..."
               : esRegistro
-              ? "Crear Cuenta y Continuar"
+              ? "Crear Cuenta"
               : "Iniciar Sesión"}
           </button>
         </form>
