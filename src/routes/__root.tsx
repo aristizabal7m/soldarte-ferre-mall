@@ -9,6 +9,7 @@ import {
 import { useState, useEffect, useRef } from "react";
 import { useSession } from "@/hooks/use-session";
 import { supabase } from "@/lib/supabase";
+import { AsistenteIA } from "@/components/AsistenteIA";
 import {
   Menu,
   X,
@@ -280,6 +281,7 @@ function RootLayout() {
         <div className="flex-1">
           <Outlet />
         </div>
+        <AsistenteIA />
         <footer className="border-t border-border bg-card py-6 text-center text-xs text-muted-foreground">
           <div className="container mx-auto px-4">
             <p className="font-display font-bold uppercase tracking-wider text-foreground">
