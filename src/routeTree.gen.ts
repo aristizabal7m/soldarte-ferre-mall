@@ -14,6 +14,7 @@ import { Route as AdminRouteImport } from './routes/admin'
 import { Route as CotizarRouteImport } from './routes/cotizar'
 import { Route as HerramientasRouteImport } from './routes/herramientas'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as MisPedidosRouteImport } from './routes/mis-pedidos'
 import { Route as PanelRouteImport } from './routes/panel'
 import { Route as VenderRouteImport } from './routes/vender'
 import { Route as FerreteriaIdRouteImport } from './routes/ferreteria.$id'
@@ -43,6 +44,11 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MisPedidosRoute = MisPedidosRouteImport.update({
+  id: '/mis-pedidos',
+  path: '/mis-pedidos',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PanelRoute = PanelRouteImport.update({
   id: '/panel',
   path: '/panel',
@@ -65,6 +71,7 @@ export interface FileRoutesByFullPath {
   '/cotizar': typeof CotizarRoute
   '/herramientas': typeof HerramientasRoute
   '/login': typeof LoginRoute
+  '/mis-pedidos': typeof MisPedidosRoute
   '/panel': typeof PanelRoute
   '/vender': typeof VenderRoute
   '/ferreteria/$id': typeof FerreteriaIdRoute
@@ -75,6 +82,7 @@ export interface FileRoutesByTo {
   '/cotizar': typeof CotizarRoute
   '/herramientas': typeof HerramientasRoute
   '/login': typeof LoginRoute
+  '/mis-pedidos': typeof MisPedidosRoute
   '/panel': typeof PanelRoute
   '/vender': typeof VenderRoute
   '/ferreteria/$id': typeof FerreteriaIdRoute
@@ -86,6 +94,7 @@ export interface FileRoutesById {
   '/cotizar': typeof CotizarRoute
   '/herramientas': typeof HerramientasRoute
   '/login': typeof LoginRoute
+  '/mis-pedidos': typeof MisPedidosRoute
   '/panel': typeof PanelRoute
   '/vender': typeof VenderRoute
   '/ferreteria/$id': typeof FerreteriaIdRoute
@@ -98,6 +107,7 @@ export interface FileRouteTypes {
     | '/cotizar'
     | '/herramientas'
     | '/login'
+    | '/mis-pedidos'
     | '/panel'
     | '/vender'
     | '/ferreteria/$id'
@@ -108,6 +118,7 @@ export interface FileRouteTypes {
     | '/cotizar'
     | '/herramientas'
     | '/login'
+    | '/mis-pedidos'
     | '/panel'
     | '/vender'
     | '/ferreteria/$id'
@@ -118,6 +129,7 @@ export interface FileRouteTypes {
     | '/cotizar'
     | '/herramientas'
     | '/login'
+    | '/mis-pedidos'
     | '/panel'
     | '/vender'
     | '/ferreteria/$id'
@@ -129,6 +141,7 @@ export interface RootRouteChildren {
   CotizarRoute: typeof CotizarRoute
   HerramientasRoute: typeof HerramientasRoute
   LoginRoute: typeof LoginRoute
+  MisPedidosRoute: typeof MisPedidosRoute
   PanelRoute: typeof PanelRoute
   VenderRoute: typeof VenderRoute
   FerreteriaIdRoute: typeof FerreteriaIdRoute
@@ -171,6 +184,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/mis-pedidos': {
+      id: '/mis-pedidos'
+      path: '/mis-pedidos'
+      fullPath: '/mis-pedidos'
+      preLoaderRoute: typeof MisPedidosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/panel': {
       id: '/panel'
       path: '/panel'
@@ -201,6 +221,7 @@ const rootRouteChildren: RootRouteChildren = {
   CotizarRoute: CotizarRoute,
   HerramientasRoute: HerramientasRoute,
   LoginRoute: LoginRoute,
+  MisPedidosRoute: MisPedidosRoute,
   PanelRoute: PanelRoute,
   VenderRoute: VenderRoute,
   FerreteriaIdRoute: FerreteriaIdRoute,

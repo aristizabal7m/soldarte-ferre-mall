@@ -9,7 +9,16 @@ import {
 import { useState, useEffect, useRef } from "react";
 import { useSession } from "@/hooks/use-session";
 import { supabase } from "@/lib/supabase";
-import { Menu, X, LogIn, LogOut, Store, ShieldCheck, LayoutDashboard } from "lucide-react";
+import {
+  Menu,
+  X,
+  LogIn,
+  LogOut,
+  Store,
+  ShieldCheck,
+  LayoutDashboard,
+  ShoppingBag,
+} from "lucide-react";
 import appCss from "../styles.css?url";
 
 export const Route = createRootRoute({
@@ -136,7 +145,7 @@ function Navbar() {
           )}
         </nav>
 
-        {/* Menú Hamburguesa (Cuenta y Registro de Negocio) */}
+        {/* Menú Hamburguesa (Cuenta, Pedidos y Registro de Negocio) */}
         <div className="relative" ref={menuRef}>
           <button
             type="button"
@@ -221,6 +230,15 @@ function Navbar() {
                       {user?.email}
                     </span>
                   </div>
+
+                  <Link
+                    to="/mis-pedidos"
+                    onClick={() => setMenuAbierto(false)}
+                    className="flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold uppercase tracking-wider text-foreground hover:bg-accent"
+                  >
+                    <ShoppingBag className="h-4 w-4 text-forge" />
+                    <span>Mis Pedidos</span>
+                  </Link>
 
                   {!tieneFerreteria && (
                     <Link
